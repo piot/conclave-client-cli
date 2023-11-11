@@ -1,0 +1,16 @@
+depsversion = "0.0.0"
+
+name = "piot/conclave-client-cli"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/conclave-client-c"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/guise-client-udp-c"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/redline"
+version = "0.0.0"
