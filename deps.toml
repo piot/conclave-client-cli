@@ -14,3 +14,7 @@ version = "0.0.0"
 [[dependencies]]
 name = "piot/redline"
 version = "0.0.0"
+
+[[dependencies]]
+name = "piot/clash-c"
+version = "0.0.0"

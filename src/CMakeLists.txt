@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(conclave-client-cli C)
 
+add_subdirectory(deps/piot/clash-c/src/lib)
 add_subdirectory(deps/piot/clog/src/lib)
 add_subdirectory(deps/piot/conclave-client-c/src/lib)
 add_subdirectory(deps/piot/conclave-serialize-c/src/lib)
