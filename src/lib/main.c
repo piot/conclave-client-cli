@@ -52,9 +52,10 @@ typedef struct RoomCreateCmd {
     const char* filename;
 } RoomCreateCmd;
 
-static void onRoomCreate(void* _self, const RoomCreateCmd* data, ClashResponse* response)
+static void onRoomCreate(void* _self, const void* _data, ClashResponse* response)
 {
     App* self = (App*)_self;
+    const RoomCreateCmd* data = (const RoomCreateCmd*)_data;
     clashResponseWritecf(response, 3, "\nroom create: (app:%s) '", self->secret);
     clashResponseWritecf(response, 1, "%s", data->filename);
     clashResponseResetColor(response);
