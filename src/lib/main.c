@@ -12,6 +12,7 @@
 #include <guise-client-udp/read_secret.h>
 #include <imprint/default_setup.h>
 #include <redline/edit.h>
+#include <signal.h>
 
 clog_config g_clog;
 
@@ -51,8 +52,9 @@ typedef struct RoomCreateCmd {
     const char* filename;
 } RoomCreateCmd;
 
-static void onRoomCreate(App* self, const RoomCreateCmd* data, ClashResponse* response)
+static void onRoomCreate(void* _self, const RoomCreateCmd* data, ClashResponse* response)
 {
+    App* self = (App*)_self;
     clashResponseWritecf(response, 3, "\nroom create: (app:%s) '", self->secret);
     clashResponseWritecf(response, 1, "%s", data->filename);
     clashResponseResetColor(response);
