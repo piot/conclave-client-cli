@@ -11,7 +11,7 @@ target_include_directories(conclave-client-cli PRIVATE ../include)
 
 
 target_link_libraries(conclave-client-cli PUBLIC 
-  conclave-client
+  conclave-client-udp
   guise-client-udp
   redline
   clash)

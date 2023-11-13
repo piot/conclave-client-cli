@@ -6,6 +6,7 @@
 #include <clash/response.h>
 #include <clog/clog.h>
 #include <clog/console.h>
+#include <conclave-client-udp/client.h>
 #include <errno.h>
 #include <flood/out_stream.h>
 #include <guise-client-udp/client.h>
@@ -45,6 +46,7 @@ static void drawPrompt(RedlineEdit* edit)
 
 typedef struct App {
     const char* secret;
+    ClvClientUdp clvClient;
 } App;
 
 typedef struct RoomCreateCmd {
@@ -61,6 +63,14 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
     clashResponseResetColor(response);
     clashResponseWritef(response, "'");
     clashResponseWritecf(response, 18, " verbose:%d\n", data->verbose);
+
+    ClvSerializeRoomCreateOptions createRoom;
+    createRoom.applicationId = 1;
+    createRoom.maxNumberOfPlayers = 8;
+    createRoom.flags = 0;
+    createRoom.name = "secret room";
+
+    clvClientUdpCreateRoom(&self->clvClient, &createRoom);
 }
 
 static ClashOption recordStartOptions[]
@@ -105,12 +115,26 @@ int main(void)
     uint8_t buf[1024];
     fldOutStreamInit(&outStream, buf, 1024);
 
+    const char* conclaveHost = "127.0.0.1";
+    const uint16_t conclavePort = 27005;
+
     App app;
     app.secret = "working";
+
+    bool hasStartedConclave = false;
 
     while (!g_quit) {
         MonotonicTimeMs now = monotonicTimeMsNow();
         guiseClientUdpUpdate(&guiseClient, now);
+        if (!hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
+            CLOG_INFO("conclave init")
+            clvClientUdpInit(&app.clvClient, 0, conclaveHost, conclavePort,
+                guiseClient.guiseClient.mainUserSessionId);
+            hasStartedConclave = true;
+        }
+        if (hasStartedConclave) {
+            clvClientUdpUpdate(&app.clvClient, now);
+        }
         int result = redlineEditUpdate(&edit);
         if (result == -1) {
             printf("\nCommand is done!\n");

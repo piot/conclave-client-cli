@@ -4,7 +4,7 @@ name = "piot/conclave-client-cli"
 version = "0.0.0"
 
 [[dependencies]]
-name = "piot/conclave-client-c"
+name = "piot/conclave-client-udp-c"
 version = "0.0.0"
 
 [[dependencies]]

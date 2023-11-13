@@ -1,0 +1,5 @@
+.cmake/
+.idea/
+Testing/
+.ninja_*
+*.ninja
