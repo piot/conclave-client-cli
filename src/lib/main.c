@@ -115,8 +115,13 @@ int main(void)
     uint8_t buf[1024];
     fldOutStreamInit(&outStream, buf, 1024);
 
+    Clog clvClientUdpLog;
+
+    clvClientUdpLog.config = &g_clog;
+    clvClientUdpLog.constantPrefix = "clvClientUdp";
+
     const char* conclaveHost = "127.0.0.1";
-    const uint16_t conclavePort = 27005;
+    const uint16_t conclavePort = 27003;
 
     App app;
     app.secret = "working";
@@ -128,8 +133,8 @@ int main(void)
         guiseClientUdpUpdate(&guiseClient, now);
         if (!hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
             CLOG_INFO("conclave init")
-            clvClientUdpInit(&app.clvClient, 0, conclaveHost, conclavePort,
-                guiseClient.guiseClient.mainUserSessionId);
+            clvClientUdpInit(&app.clvClient, conclaveHost, conclavePort,
+                guiseClient.guiseClient.mainUserSessionId, clvClientUdpLog);
             hasStartedConclave = true;
         }
         if (hasStartedConclave) {
@@ -137,8 +142,6 @@ int main(void)
         }
         int result = redlineEditUpdate(&edit);
         if (result == -1) {
-            printf("\nCommand is done!\n");
-            drawPrompt(&edit);
             const char* textInput = redlineEditLine(&edit);
             if (tc_str_equal(textInput, "quit")) {
                 printf("\n");
