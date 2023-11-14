@@ -7,6 +7,8 @@
 #include <clog/clog.h>
 #include <clog/console.h>
 #include <conclave-client-udp/client.h>
+#include <conclave-client/debug.h>
+#include <conclave-client/realize_debug.h>
 #include <errno.h>
 #include <flood/out_stream.h>
 #include <guise-client-udp/client.h>
@@ -47,6 +49,7 @@ static void drawPrompt(RedlineEdit* edit)
 typedef struct App {
     const char* secret;
     ClvClientUdp clvClient;
+    bool hasStartedConclave;
 } App;
 
 typedef struct RoomCreateCmd {
@@ -58,7 +61,7 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
 {
     App* self = (App*)_self;
     const RoomCreateCmd* data = (const RoomCreateCmd*)_data;
-    clashResponseWritecf(response, 3, "\nroom create: (app:%s) '", self->secret);
+    clashResponseWritecf(response, 3, "room create: (app:%s) '", self->secret);
     clashResponseWritecf(response, 1, "%s", data->filename);
     clashResponseResetColor(response);
     clashResponseWritef(response, "'");
@@ -73,6 +76,20 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
     clvClientUdpCreateRoom(&self->clvClient, &createRoom);
 }
 
+static void onState(void* _self, const void* data, ClashResponse* response)
+{
+    (void)data;
+    (void)response;
+
+    App* self = (App*)_self;
+    if (!self->hasStartedConclave) {
+        clashResponseWritecf(response, 4, "conclave not started yet\n");
+        return;
+    }
+    clvClientRealizeDebugOutput(&self->clvClient.conclaveClient);
+    clvClientDebugOutput(&self->clvClient.conclaveClient.client);
+}
+
 static ClashOption recordStartOptions[]
     = { { "name", 'n', "the file name to store capture to", ClashTypeString | ClashTypeArg,
             "somefile.swamp-capture", offsetof(RoomCreateCmd, filename) },
@@ -85,7 +102,8 @@ static ClashCommand roomCommands[] = {
 };
 
 static ClashCommand mainCommands[] = { { "room", "room commands", 0, 0, 0, roomCommands,
-    sizeof(roomCommands) / sizeof(roomCommands[0]), 0 } };
+                                           sizeof(roomCommands) / sizeof(roomCommands[0]), 0 },
+    { "state", "show state on conclave client", 0, 0, 0, 0, 0, onState } };
 
 static ClashDefinition commands = { mainCommands, sizeof(mainCommands) / sizeof(mainCommands[0]) };
 
@@ -125,26 +143,25 @@ int main(void)
 
     App app;
     app.secret = "working";
-
-    bool hasStartedConclave = false;
+    app.hasStartedConclave = false;
 
     while (!g_quit) {
         MonotonicTimeMs now = monotonicTimeMsNow();
         guiseClientUdpUpdate(&guiseClient, now);
-        if (!hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
+        if (!app.hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
             CLOG_INFO("conclave init")
             clvClientUdpInit(&app.clvClient, conclaveHost, conclavePort,
                 guiseClient.guiseClient.mainUserSessionId, clvClientUdpLog);
-            hasStartedConclave = true;
+            app.hasStartedConclave = true;
         }
-        if (hasStartedConclave) {
+        if (app.hasStartedConclave) {
             clvClientUdpUpdate(&app.clvClient, now);
         }
         int result = redlineEditUpdate(&edit);
         if (result == -1) {
+            printf("\n");
             const char* textInput = redlineEditLine(&edit);
             if (tc_str_equal(textInput, "quit")) {
-                printf("\n");
                 break;
             } else if (tc_str_equal(textInput, "help")) {
                 outStream.p = outStream.octets;
@@ -161,7 +178,9 @@ int main(void)
                     printf("unknown command %d\n", parseResult);
                 }
 
-                puts((const char*)outStream.octets);
+                if (outStream.pos > 0) {
+                    fputs((const char*)outStream.octets, stdout);
+                }
                 outStream.p = outStream.octets;
                 outStream.pos = 0;
             }
