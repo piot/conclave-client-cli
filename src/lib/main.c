@@ -8,7 +8,6 @@
 #include <clog/console.h>
 #include <conclave-client-udp/client.h>
 #include <conclave-client/debug.h>
-#include <conclave-client/realize_debug.h>
 #include <errno.h>
 #include <flood/out_stream.h>
 #include <guise-client-udp/client.h>
@@ -53,13 +52,24 @@ typedef struct App {
     bool hasStartedConclave;
     uint8_t lastShownPingResponseVersion;
     uint8_t lastShownRoomCreateVersion;
+    uint8_t lastShownRoomListVersion;
     Clog log;
 } App;
 
 typedef struct RoomCreateCmd {
     int verbose;
-    const char* filename;
+    const char* name;
 } RoomCreateCmd;
+
+typedef struct RoomJoinCmd {
+    int verbose;
+    uint64_t roomId;
+} RoomJoinCmd;
+
+typedef struct RoomListCmd {
+    uint64_t applicationId;
+    int maximumCount;
+} RoomListCmd;
 
 typedef struct PingCmd {
     int verbose;
@@ -71,7 +81,7 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
     App* self = (App*)_self;
     const RoomCreateCmd* data = (const RoomCreateCmd*)_data;
     clashResponseWritecf(response, 3, "room create: (app:%s) '", self->secret);
-    clashResponseWritecf(response, 1, "%s", data->filename);
+    clashResponseWritecf(response, 1, "%s", data->name);
     clashResponseResetColor(response);
     clashResponseWritef(response, "'");
     clashResponseWritecf(response, 18, " verbose:%d\n", data->verbose);
@@ -85,6 +95,30 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
     clvClientUdpCreateRoom(&self->clvClient, &createRoom);
 }
 
+static void onRoomJoin(void* _self, const void* _data, ClashResponse* response)
+{
+    App* self = (App*)_self;
+    (void)self;
+    const RoomJoinCmd* data = (const RoomJoinCmd*)_data;
+    clashResponseWritecf(response, 3, "room join: %" PRIX64 "\n", data->roomId);
+}
+
+static void onRoomList(void* _self, const void* _data, ClashResponse* response)
+{
+    App* self = (App*)_self;
+    (void)self;
+    const RoomListCmd* data = (const RoomListCmd*)_data;
+    (void)data;
+    clashResponseWritecf(response, 4, "room list requested\n");
+
+    ClvSerializeListRoomsOptions request;
+
+    request.applicationId = data->applicationId;
+    request.maximumCount = (uint8_t)data->maximumCount;
+
+    clvClientListRooms(&self->clvClient.conclaveClient, &request);
+}
+
 static void onState(void* _self, const void* data, ClashResponse* response)
 {
     (void)data;
@@ -95,10 +129,7 @@ static void onState(void* _self, const void* data, ClashResponse* response)
         clashResponseWritecf(response, 4, "conclave not started yet\n");
         return;
     }
-    printf("realize state: %s target: %s\n",
-        clvClientRealizeStateToString(self->clvClient.conclaveClient.state),
-        clvClientRealizeStateToString(self->clvClient.conclaveClient.targetState));
-    printf("state: %s\n", clvClientStateToString(self->clvClient.conclaveClient.client.state));
+    printf("state: %s\n", clvClientStateToString(self->clvClient.conclaveClient.state));
 }
 
 static void onPing(void* _self, const void* _data, ClashResponse* response)
@@ -112,18 +143,34 @@ static void onPing(void* _self, const void* _data, ClashResponse* response)
         return;
     }
 
-    clvClientRealizePing(&self->clvClient.conclaveClient, (uint64_t)data->knowledge);
+    clvClientPing(&self->clvClient.conclaveClient, (uint64_t)data->knowledge);
 }
 
 static ClashOption roomCreateOptions[]
-    = { { "name", 'n', "the file name to store capture to", ClashTypeString | ClashTypeArg,
-            "somefile.swamp-capture", offsetof(RoomCreateCmd, filename) },
+    = { { "name", 'n', "the name of the room", ClashTypeString | ClashTypeArg, "secretRoom",
+            offsetof(RoomCreateCmd, name) },
           { "verbose", 'v', "enable detailed output", ClashTypeFlag, "",
               offsetof(RoomCreateCmd, verbose) } };
+
+static ClashOption roomJoinOptions[] = {
+    { "id", 'i', "the id of the room to join", ClashTypeUInt64 | ClashTypeArg, "",
+        offsetof(RoomJoinCmd, roomId) },
+    { "verbose", 'v', "enable detailed output", ClashTypeFlag, "", offsetof(RoomJoinCmd, verbose) }
+};
+
+static ClashOption roomListOptions[]
+    = { { "applicationId", 'i', "the application ID", ClashTypeUInt64 | ClashTypeArg, "42",
+            offsetof(RoomListCmd, applicationId) },
+          { "maximumCount", 'c', "enable detailed output", ClashTypeInt, "8",
+              offsetof(RoomListCmd, maximumCount) } };
 
 static ClashCommand roomCommands[] = {
     { "create", "Create a room", sizeof(struct RoomCreateCmd), roomCreateOptions,
         sizeof(roomCreateOptions) / sizeof(roomCreateOptions[0]), 0, 0, (ClashFn)onRoomCreate },
+    { "join", "Join a room", sizeof(struct RoomJoinCmd), roomJoinOptions,
+        sizeof(roomJoinOptions) / sizeof(roomJoinOptions[0]), 0, 0, (ClashFn)onRoomJoin },
+    { "list", "list rooms", sizeof(struct RoomListCmd), roomListOptions,
+        sizeof(roomListOptions) / sizeof(roomListOptions[0]), 0, 0, (ClashFn)onRoomList },
 };
 
 static ClashOption pingOptions[] = {
@@ -142,10 +189,15 @@ static ClashCommand mainCommands[] = {
 
 static ClashDefinition commands = { mainCommands, sizeof(mainCommands) / sizeof(mainCommands[0]) };
 
+static void printHouse(void)
+{
+    printf("\xF0\x9F\x8F\xA0");
+}
+
 static void outputChangesIfAny(App* app, RedlineEdit* edit)
 {
-    ClvClientRealize* conclaveClientRealize = &app->clvClient.conclaveClient;
-    ClvClient* conclaveClient = &conclaveClientRealize->client;
+    ClvClient* conclaveClient = &app->clvClient.conclaveClient;
+    //ClvClient* conclaveClient = &conclaveClientRealize->client;
 
     if (conclaveClient->pingResponseOptionsVersion != app->lastShownPingResponseVersion) {
         redlineEditRemove(edit);
@@ -171,8 +223,25 @@ static void outputChangesIfAny(App* app, RedlineEdit* edit)
         app->lastShownRoomCreateVersion = conclaveClient->roomCreateVersion;
         redlineEditRemove(edit);
         printf("--- Room Create Done ---\n");
-        printf("\xF0\x9F\x8F\xA0 roomID: %d, connectionToRoom: %d\n", conclaveClient->mainRoomId,
+        printHouse();
+        printf(" roomID: %d, connectionToRoom: %d\n", conclaveClient->mainRoomId,
             conclaveClient->roomConnectionIndex);
+        drawPrompt(edit);
+        redlineEditBringback(edit);
+    }
+
+    if (conclaveClient->listRoomsOptionsVersion != app->lastShownRoomListVersion) {
+        app->lastShownRoomListVersion = conclaveClient->listRoomsOptionsVersion;
+        redlineEditRemove(edit);
+        printf("--- Room list received ---\n");
+        for (size_t i = 0; i < conclaveClient->listRoomsResponseOptions.roomInfoCount; ++i) {
+            const ClvSerializeRoomInfo* roomInfo
+                = &conclaveClient->listRoomsResponseOptions.roomInfos[i];
+            printHouse();
+            printf(" roomId: %d, name: '%s', owner: %" PRIX64 " application:%" PRIx64 "\n",
+                roomInfo->roomId, roomInfo->roomName, roomInfo->ownerUserId,
+                roomInfo->applicationId);
+        }
         drawPrompt(edit);
         redlineEditBringback(edit);
     }
@@ -216,6 +285,7 @@ int main(void)
     app.hasStartedConclave = false;
     app.lastShownPingResponseVersion = 0;
     app.lastShownRoomCreateVersion = 0;
+    app.lastShownRoomListVersion = 0;
     app.log.config = &g_clog;
     app.log.constantPrefix = "app";
 
@@ -225,11 +295,14 @@ int main(void)
         if (!app.hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
             CLOG_INFO("conclave init")
             clvClientUdpInit(&app.clvClient, conclaveHost, conclavePort,
-                guiseClient.guiseClient.mainUserSessionId, clvClientUdpLog);
+                guiseClient.guiseClient.mainUserSessionId, monotonicTimeMsNow(), clvClientUdpLog);
             app.hasStartedConclave = true;
         }
         if (app.hasStartedConclave) {
-            clvClientUdpUpdate(&app.clvClient, now);
+            int updateResult = clvClientUdpUpdate(&app.clvClient, now);
+            if (updateResult < 0) {
+                return updateResult;
+            }
             outputChangesIfAny(&app, &edit);
         }
         int result = redlineEditUpdate(&edit);
