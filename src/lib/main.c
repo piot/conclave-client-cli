@@ -101,6 +101,12 @@ static void onRoomJoin(void* _self, const void* _data, ClashResponse* response)
     (void)self;
     const RoomJoinCmd* data = (const RoomJoinCmd*)_data;
     clashResponseWritecf(response, 3, "room join: %" PRIX64 "\n", data->roomId);
+
+    ClvSerializeRoomJoinOptions request;
+
+    request.roomIdToJoin = (ClvSerializeRoomId)data->roomId;
+
+    clvClientJoinRoom(&self->clvClient.conclaveClient, &request);
 }
 
 static void onRoomList(void* _self, const void* _data, ClashResponse* response)
@@ -247,7 +253,7 @@ static void outputChangesIfAny(App* app, RedlineEdit* edit)
     }
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
     g_clog.log = clog_console;
     g_clog.level = CLOG_TYPE_VERBOSE;
@@ -255,7 +261,13 @@ int main(void)
     signal(SIGINT, interruptHandler);
 
     GuiseClientUdpSecret guiseSecret;
-    guiseClientUdpReadSecret(&guiseSecret);
+
+    size_t indexToRead = 0;
+    if (argc > 1) {
+        indexToRead = (size_t)atoi(argv[1]);
+    }
+
+    guiseClientUdpReadSecret(&guiseSecret, indexToRead);
 
     ImprintDefaultSetup imprint;
     imprintDefaultSetupInit(&imprint, 128 * 1024);
@@ -295,7 +307,7 @@ int main(void)
         if (!app.hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
             CLOG_INFO("conclave init")
             clvClientUdpInit(&app.clvClient, conclaveHost, conclavePort,
-                guiseClient.guiseClient.mainUserSessionId, monotonicTimeMsNow(), clvClientUdpLog);
+                guiseClient.guiseClient.mainUserSessionId, monotonicTimeMsNow(), &imprint.slabAllocator.info, clvClientUdpLog);
             app.hasStartedConclave = true;
         }
         if (app.hasStartedConclave) {
