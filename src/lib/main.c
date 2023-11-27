@@ -88,9 +88,13 @@ static void onRoomCreate(void* _self, const void* _data, ClashResponse* response
 
     ClvSerializeRoomCreateOptions createRoom;
     createRoom.applicationId = 1;
+    createRoom.applicationVersion.major = 1;
+    createRoom.applicationVersion.minor = 2;
+    createRoom.applicationVersion.patch = 3;
+
     createRoom.maxNumberOfPlayers = 8;
     createRoom.flags = 0;
-    createRoom.name = "secret room";
+    tc_strcpy(createRoom.name, 64, data->name);
 
     clvClientUdpCreateRoom(&self->clvClient, &createRoom);
 }
@@ -244,9 +248,13 @@ static void outputChangesIfAny(App* app, RedlineEdit* edit)
             const ClvSerializeRoomInfo* roomInfo
                 = &conclaveClient->listRoomsResponseOptions.roomInfos[i];
             printHouse();
-            printf(" roomId: %d, name: '%s', owner: %" PRIX64 " application:%" PRIx64 "\n",
-                roomInfo->roomId, roomInfo->roomName, roomInfo->ownerUserId,
-                roomInfo->applicationId);
+            printf(" roomId: %d, name: '%s', owner: %" PRIX64
+                   " members:%d/%d stateOctetCount: %hu, application:%" PRIx64
+                   " version:%d.%d.%d\n",
+                roomInfo->roomId, roomInfo->roomName, roomInfo->ownerUserId, roomInfo->memberCount,
+                roomInfo->maxMemberCount, roomInfo->externalStateOctetCount,
+                roomInfo->applicationId, roomInfo->applicationVersion.major,
+                roomInfo->applicationVersion.minor, roomInfo->applicationVersion.patch);
         }
         drawPrompt(edit);
         redlineEditBringback(edit);
@@ -307,7 +315,8 @@ int main(int argc, char** argv)
         if (!app.hasStartedConclave && guiseClient.guiseClient.state == GuiseClientStateLoggedIn) {
             CLOG_INFO("conclave init")
             clvClientUdpInit(&app.clvClient, conclaveHost, conclavePort,
-                guiseClient.guiseClient.mainUserSessionId, monotonicTimeMsNow(), &imprint.slabAllocator.info, clvClientUdpLog);
+                guiseClient.guiseClient.mainUserSessionId, monotonicTimeMsNow(),
+                &imprint.slabAllocator.info, clvClientUdpLog);
             app.hasStartedConclave = true;
         }
         if (app.hasStartedConclave) {
