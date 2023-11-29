@@ -74,6 +74,7 @@ typedef struct RoomListCmd {
 typedef struct PingCmd {
     int verbose;
     int knowledge;
+    bool hasConnectionToOwner;
 } PingCmd;
 
 static void onRoomCreate(void* _self, const void* _data, ClashResponse* response)
@@ -153,7 +154,8 @@ static void onPing(void* _self, const void* _data, ClashResponse* response)
         return;
     }
 
-    clvClientPing(&self->clvClient.conclaveClient, (uint64_t)data->knowledge);
+    clvClientPing(
+        &self->clvClient.conclaveClient, (uint64_t)data->knowledge, data->hasConnectionToOwner);
 }
 
 static ClashOption roomCreateOptions[]
@@ -186,6 +188,8 @@ static ClashCommand roomCommands[] = {
 static ClashOption pingOptions[] = {
     { "knowledge", 'k', "how much knowledge (simulation tick ID) that the client has",
         (ClashOptionType)ClashTypeInt | ClashTypeArg, "0", offsetof(PingCmd, knowledge) },
+    { "isconnected", 'c', "has connection to room owner", ClashTypeBool, "",
+        offsetof(PingCmd, hasConnectionToOwner) },
     { "verbose", 'v', "enable detailed output", ClashTypeFlag, "", offsetof(PingCmd, verbose) }
 };
 
@@ -214,6 +218,9 @@ static void outputChangesIfAny(App* app, RedlineEdit* edit)
         app->lastShownPingResponseVersion = conclaveClient->pingResponseOptionsVersion;
         const ClvSerializePingResponseOptions* pingResponse = &conclaveClient->pingResponseOptions;
         printf("--- room info updated ---\n");
+        printf(
+            "term: %" PRIx64 ", version:%" PRIx64 "\n", pingResponse->term, pingResponse->version);
+
         for (size_t i = 0; i < pingResponse->roomInfo.memberCount; ++i) {
             if (i == pingResponse->roomInfo.indexOfOwner) {
                 printf("\xF0\x9F\x91\x91"); // Crown
