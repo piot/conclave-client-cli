@@ -29,11 +29,9 @@ jobs:
 
       - name: create cmake cache
         run: cmake -DCMAKE_BUILD_TYPE=Debug .
-        working-directory: src/
 
       - name: build
         run: cmake --build . --clean-first
-        working-directory: src/
 
       - uses: actions/upload-artifact@v3
         with:
